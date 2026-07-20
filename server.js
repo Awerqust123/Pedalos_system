@@ -2,15 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
+const SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     console.error('Missing SUPABASE env vars');
     process.exit(1);
 }
 
-// Сервер використовує секретний ключ для обходу всіх правил і створення акаунтів
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const app = express();
 app.use(cors());
@@ -26,7 +25,9 @@ async function requireAdmin(req, res, next) {
     const { data: roleRow, error: roleErr } = await supabaseAdmin.from('user_roles')
         .select('role_key').eq('user_id', userData.user.id).eq('role_key', 'admin').maybeSingle();
 
-    if (roleErr) return res.status(500).json({ error: 'Помилка ключів! Перевір SUPABASE_SERVICE_ROLE_KEY на Render.' });
+    // Тепер ми побачимо ТОЧНУ причину, якщо база свариться на ключ
+    if (roleErr) return res.status(500).json({ error: `Детальна помилка БД: ${roleErr.message}` });
+    
     if (!roleRow) return res.status(403).json({ error: 'У тебе немає прав адміністратора на сервері' });
 
     req.callerId = userData.user.id;
@@ -36,7 +37,6 @@ async function requireAdmin(req, res, next) {
 app.post('/admin/create-user', requireAdmin, async (req, res) => {
     const { username, password, display_name } = req.body;
     
-    // Supabase вимагає мінімум 6 символів
     if (password.length < 6) {
         return res.status(400).json({ error: 'Пароль має містити щонайменше 6 символів' });
     }
@@ -48,7 +48,6 @@ app.post('/admin/create-user', requireAdmin, async (req, res) => {
 
     const { error: profileErr } = await supabaseAdmin.from('profiles').insert({ id: created.user.id, display_name });
     if (profileErr) {
-        // Якщо профіль не створився, видаляємо акаунт, щоб не було "сміття" в базі
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
         return res.status(400).json({ error: profileErr.message });
     }
