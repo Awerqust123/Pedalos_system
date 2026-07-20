@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pedalos-admin-server
+    env: node
+    rootDir: admin-server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
