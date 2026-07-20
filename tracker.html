@@ -211,7 +211,8 @@
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2dW91bGF5Ynh0cnJocHNmdmphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTE3NzYsImV4cCI6MjEwMDEyNzc3Nn0.I6AW6Pl9EO4c7scRmAAWV8OcMx_-YLR2wfBL0MJvkK0";
         const ADMIN_SERVER_URL = "https://pedalos-adminsystem.onrender.com";
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Виправлено: перейменовано змінну з 'supabase' на 'sb', щоб уникнути конфлікту імен
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const STAGES = [
             { key: "clean", label: "Клін" }, { key: "translate", label: "Переклад" },
             { key: "edit", label: "Редактура" }, { key: "typeset", label: "Тайп" }, { key: "qc", label: "QC" }
@@ -227,15 +228,13 @@
         document.getElementById('loginBtn').onclick = async () => {
             const login = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
-            // Виправлено: правильний формат регулярного виразу
             const email = `${login.toLowerCase().replace(/\s+/g, '_')}@pedalos.team`; 
             
             const errEl = document.getElementById('loginError');
             errEl.classList.add('hidden');
 
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            const { data, error } = await sb.auth.signInWithPassword({ email, password });
             if (error) { 
-                // Виправлено: Зрозуміле українське повідомлення про помилку
                 errEl.textContent = 'Помилка: Невірний логін або пароль'; 
                 errEl.classList.remove('hidden'); 
                 return; 
@@ -243,13 +242,13 @@
             session = data.session; await afterLogin();
         };
 
-        document.getElementById('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+        document.getElementById('logoutBtn').onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
         async function afterLogin() {
-            const { data: { user } } = await supabase.auth.getUser();
-            const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            const { data: roles } = await supabase.from('user_roles').select('role_key').eq('user_id', user.id);
-            const { data: rolesCatalog } = await supabase.from('roles').select('*');
+            const { data: { user } } = await sb.auth.getUser();
+            const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+            const { data: roles } = await sb.from('user_roles').select('role_key').eq('user_id', user.id);
+            const { data: rolesCatalog } = await sb.from('roles').select('*');
 
             myProfile = profile; 
             myRoles = (roles || []).map(r => r.role_key); 
@@ -282,7 +281,7 @@
 
         // --- DATA LOAD ---
         async function loadData() {
-            const { data: t } = await supabase.from('titles').select('*').order('name');
+            const { data: t } = await sb.from('titles').select('*').order('name');
             myTitles = t || [];
             const sel = document.getElementById('titleSelect');
             sel.innerHTML = myTitles.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
@@ -302,9 +301,9 @@
         // --- ДЕТАЛІ ТАЙТЛА (Робоча зона) ---
         async function loadTitleData() {
             document.getElementById('titleContent').classList.remove('hidden');
-            const { data: mem } = await supabase.from('title_members').select('*').eq('title_id', selectedTitleId);
+            const { data: mem } = await sb.from('title_members').select('*').eq('title_id', selectedTitleId);
             titleMembers = mem || [];
-            const { data: profs } = await supabase.from('profiles').select('*').eq('is_active', true);
+            const { data: profs } = await sb.from('profiles').select('*').eq('is_active', true);
             allProfiles = profs || [];
 
             const wrap = document.getElementById('titleMembers');
@@ -323,9 +322,9 @@
                 document.getElementById('addMemberRole').innerHTML = allRoles.filter(r=>r.key !== 'admin').map(r => `<option value="${r.key}">${r.label}</option>`).join('');
             }
 
-            const { data: ch } = await supabase.from('chapters').select('*').eq('title_id', selectedTitleId).order('number');
+            const { data: ch } = await sb.from('chapters').select('*').eq('title_id', selectedTitleId).order('number');
             chapters = ch || [];
-            const { data: st } = chapters.length ? await supabase.from('stage_status').select('*').in('chapter_id', chapters.map(c=>c.id)) : {data:[]};
+            const { data: st } = chapters.length ? await sb.from('stage_status').select('*').in('chapter_id', chapters.map(c=>c.id)) : {data:[]};
             statuses = st || [];
             
             const tbody = document.getElementById('tableBody');
@@ -356,22 +355,22 @@
         document.getElementById('addMemberBtn').onclick = async () => {
             const user_id = document.getElementById('addMemberUser').value;
             const role_key = document.getElementById('addMemberRole').value;
-            await supabase.from('title_members').insert({ title_id: selectedTitleId, user_id, role_key });
+            await sb.from('title_members').insert({ title_id: selectedTitleId, user_id, role_key });
             await loadTitleData();
         };
 
         window.removeMember = async (uid, rKey) => {
-            await supabase.from('title_members').delete().eq('title_id', selectedTitleId).eq('user_id', uid).eq('role_key', rKey);
+            await sb.from('title_members').delete().eq('title_id', selectedTitleId).eq('user_id', uid).eq('role_key', rKey);
             await loadTitleData();
         };
 
         document.getElementById('addChapterBtn').onclick = async () => {
             const num = document.getElementById('newChapterNumber').value.trim();
             if (!num) return;
-            const { data: nc } = await supabase.from('chapters').insert({ number: num, title_id: selectedTitleId }).select().single();
+            const { data: nc } = await sb.from('chapters').insert({ number: num, title_id: selectedTitleId }).select().single();
             if (nc) {
                 const rows = STAGES.map(s => ({ chapter_id: nc.id, stage: s.key, status: 'not_started' }));
-                await supabase.from('stage_status').insert(rows);
+                await sb.from('stage_status').insert(rows);
             }
             document.getElementById('newChapterNumber').value = '';
             await loadTitleData();
@@ -379,7 +378,7 @@
 
         window.deleteChapter = async (id) => {
             if(!confirm('Видалити розділ?')) return;
-            await supabase.from('chapters').delete().eq('id', id);
+            await sb.from('chapters').delete().eq('id', id);
             await loadTitleData();
         };
 
@@ -407,7 +406,7 @@
         document.getElementById('popoverBackdrop').addEventListener('click', (e) => { if (e.target.id === 'popoverBackdrop') document.getElementById('popoverBackdrop').classList.add('hidden'); });
 
         document.getElementById('popoverSave').onclick = async () => {
-            await supabase.from('stage_status').upsert({
+            await sb.from('stage_status').upsert({
                 chapter_id: activeCell.chapterId, stage: activeCell.stageKey,
                 assignee: document.getElementById('popoverAssignee').value || null,
                 status: document.getElementById('popoverStatus').value
@@ -423,8 +422,8 @@
             const tbody = document.getElementById('curatorTitlesTableBody');
             tbody.innerHTML = '';
             
-            const { data: allStatuses } = await supabase.from('stage_status').select('updated_at, status, stage, chapter_id');
-            const { data: allChapters } = await supabase.from('chapters').select('id, title_id, number');
+            const { data: allStatuses } = await sb.from('stage_status').select('updated_at, status, stage, chapter_id');
+            const { data: allChapters } = await sb.from('chapters').select('id, title_id, number');
 
             myTitles.forEach(title => {
                 const titleChapters = allChapters.filter(c => c.title_id === title.id);
@@ -459,7 +458,7 @@
 
         window.updateDeadline = async (id) => {
             const val = document.getElementById(`dl-${id}`).value;
-            await supabase.from('titles').update({ deadline_info: val }).eq('id', id);
+            await sb.from('titles').update({ deadline_info: val }).eq('id', id);
             alert('Дедлайн збережено');
         };
 
@@ -467,7 +466,7 @@
             const name = document.getElementById('newTitleName').value.trim();
             const dl = document.getElementById('newTitleDeadline').value.trim() || 'без';
             if (!name) return;
-            await supabase.from('titles').insert({ name, deadline_info: dl });
+            await sb.from('titles').insert({ name, deadline_info: dl });
             document.getElementById('newTitleName').value = '';
             document.getElementById('newTitleDeadline').value = '';
             await loadData();
@@ -475,7 +474,7 @@
 
         // --- БІРЖА ---
         async function loadJobs() {
-            const { data: tICurator } = await supabase.from('title_members').select('title_id').eq('user_id', myProfile.id).eq('role_key', 'title_curator');
+            const { data: tICurator } = await sb.from('title_members').select('title_id').eq('user_id', myProfile.id).eq('role_key', 'title_curator');
             const curT = (tICurator || []).map(t => myTitles.find(x => x.id === t.title_id)).filter(Boolean);
             const canPost = isAdmin() || curT.length > 0;
             
@@ -485,7 +484,7 @@
                 document.getElementById('jobRoleSelect').innerHTML = allRoles.filter(r=>r.key!=='admin').map(r => `<option value="${r.key}">${r.label}</option>`).join('');
             }
 
-            const { data: jobs } = await supabase.from('job_postings').select('*').eq('status', 'open').order('created_at', { ascending: false });
+            const { data: jobs } = await sb.from('job_postings').select('*').eq('status', 'open').order('created_at', { ascending: false });
             const list = document.getElementById('jobsList');
             list.innerHTML = '';
             document.getElementById('jobsEmptyState').classList.toggle('hidden', (jobs || []).length > 0);
@@ -502,7 +501,7 @@
                     <button class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition">Відгукнутися</button>
                 `;
                 card.querySelector('button').onclick = async () => {
-                    const { error } = await supabase.from('job_applications').insert({ posting_id: job.id, applicant_id: myProfile.id });
+                    const { error } = await sb.from('job_applications').insert({ posting_id: job.id, applicant_id: myProfile.id });
                     if (error) return alert(error.code === '23505' ? 'Ти вже відгукнувся.' : error.message);
                     alert('Відгук надіслано!');
                 };
@@ -513,7 +512,7 @@
             const title_id = parseInt(document.getElementById('jobTitleSelect').value);
             const role_needed = document.getElementById('jobRoleSelect').value;
             const note = document.getElementById('jobNote').value.trim();
-            await supabase.from('job_postings').insert({ title_id, role_needed, note, created_by: myProfile.id });
+            await sb.from('job_postings').insert({ title_id, role_needed, note, created_by: myProfile.id });
             document.getElementById('jobNote').value = '';
             await loadJobs();
         };
@@ -525,7 +524,7 @@
             const rList = document.getElementById('systemRolesList');
             rList.innerHTML = allRoles.map(r => `<span class="chip">${r.label} <span class="id-tag">${r.key}</span></span>`).join('');
 
-            const { data: allUserRoles } = await supabase.from('user_roles').select('*');
+            const { data: allUserRoles } = await sb.from('user_roles').select('*');
             const list = document.getElementById('usersList');
             list.innerHTML = '';
             
@@ -553,7 +552,7 @@
                     chip.className = 'role-badge';
                     chip.innerHTML = `${label} <button style="margin-left:4px;color:#f87171;cursor:pointer;">✕</button>`;
                     chip.querySelector('button').onclick = async () => {
-                        await supabase.from('user_roles').delete().eq('user_id', p.id).eq('role_key', rk);
+                        await sb.from('user_roles').delete().eq('user_id', p.id).eq('role_key', rk);
                         await loadAdmin();
                     };
                     rolesWrap.appendChild(chip);
@@ -563,7 +562,7 @@
                 addSel.innerHTML = '<option value="">+ додати роль</option>' + allRoles.filter(r => !rolesForUser.includes(r.key)).map(r => `<option value="${r.key}">${r.label}</option>`).join('');
                 addSel.onchange = async () => {
                     if (!addSel.value) return;
-                    await supabase.from('user_roles').insert({ user_id: p.id, role_key: addSel.value });
+                    await sb.from('user_roles').insert({ user_id: p.id, role_key: addSel.value });
                     await loadAdmin();
                 };
 
@@ -584,9 +583,9 @@
             const key = document.getElementById('newRoleKey').value.trim();
             const label = document.getElementById('newRoleLabel').value.trim();
             if(!key || !label) return;
-            await supabase.from('roles').insert({ key, label });
+            await sb.from('roles').insert({ key, label });
             document.getElementById('newRoleKey').value = ''; document.getElementById('newRoleLabel').value = '';
-            const { data } = await supabase.from('roles').select('*'); allRoles = data; 
+            const { data } = await sb.from('roles').select('*'); allRoles = data; 
             await loadAdmin();
         };
 
@@ -617,7 +616,7 @@
 
         // Init
         (async function init() {
-            const { data } = await supabase.auth.getSession();
+            const { data } = await sb.auth.getSession();
             if (data.session) { session = data.session; await afterLogin(); }
         })();
     </script>
