@@ -10,6 +10,19 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     process.exit(1);
 }
 
+// --- Безпечна діагностика: перевіряємо, який САМЕ ключ завантажився, ---
+// --- не показуючи сам секрет цілком.                                  ---
+try {
+    const payloadPart = SERVICE_ROLE_KEY.split('.')[1];
+    const decoded = JSON.parse(Buffer.from(payloadPart, 'base64').toString('utf8'));
+    console.log(`[KEY CHECK] role claim у SUPABASE_SERVICE_ROLE_KEY: "${decoded.role}" (має бути "service_role")`);
+    if (decoded.role !== 'service_role') {
+        console.error('!!! У змінну SUPABASE_SERVICE_ROLE_KEY завантажено НЕ service_role ключ. Перевір значення в Render Environment.');
+    }
+} catch (e) {
+    console.error('[KEY CHECK] Не вдалося розпарсити SUPABASE_SERVICE_ROLE_KEY як JWT — схоже, значення пошкоджене або скопійоване не повністю.');
+}
+
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const app = express();
 app.use(cors());
