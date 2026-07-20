@@ -205,7 +205,7 @@
 
     <script>
         // ==========================================
-        // ВСТАВ ТУТ СВОЇ ПОСИЛАННЯ ТА КЛЮЧІ
+        // КЛЮЧІ ДОСТУПУ (Вже вставлені)
         // ==========================================
         const SUPABASE_URL = "https://evuoulaybxtrrhpsfvja.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2dW91bGF5Ynh0cnJocHNmdmphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTE3NzYsImV4cCI6MjEwMDEyNzc3Nn0.I6AW6Pl9EO4c7scRmAAWV8OcMx_-YLR2wfBL0MJvkK0";
@@ -227,13 +227,19 @@
         document.getElementById('loginBtn').onclick = async () => {
             const login = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
-            const email = `${login.toLowerCase().replace(/\\s+/g, '_')}@pedalos.team`; 
+            // Виправлено: правильний формат регулярного виразу
+            const email = `${login.toLowerCase().replace(/\s+/g, '_')}@pedalos.team`; 
             
             const errEl = document.getElementById('loginError');
             errEl.classList.add('hidden');
 
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) { errEl.textContent = 'Помилка: ' + error.message; errEl.classList.remove('hidden'); return; }
+            if (error) { 
+                // Виправлено: Зрозуміле українське повідомлення про помилку
+                errEl.textContent = 'Помилка: Невірний логін або пароль'; 
+                errEl.classList.remove('hidden'); 
+                return; 
+            }
             session = data.session; await afterLogin();
         };
 
