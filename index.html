@@ -68,6 +68,22 @@
         </div>
     </div>
 
+    <!-- ПЕРШИЙ ВХІД: ОБОВ'ЯЗКОВА ЗМІНА ПАРОЛЯ -->
+    <div id="forcePasswordScreen" class="hidden max-w-sm mx-auto mt-20">
+        <div class="app-card p-6 shadow-xl">
+            <div class="text-center mb-5">
+                <div class="text-3xl mb-1">🔑</div>
+                <h1 class="text-lg font-bold">Це твій перший вхід</h1>
+                <p class="text-xs text-gray-400 mt-1">Встанови новий пароль, який знатимеш тільки ти</p>
+            </div>
+            <input type="password" id="newPassword1" placeholder="Новий пароль" class="mb-3">
+            <input type="password" id="newPassword2" placeholder="Повтори новий пароль" class="mb-3">
+            <p class="text-xs text-gray-500 mb-4">Пароль, яким тебе завели в систему, бачив адміністратор, що створював акаунт, — тож обов'язково зміни його на власний. Обери щось, чим ти більше ніде не користуєшся: не пароль від пошти, соцмереж чи інших важливих акаунтів. Ми не відповідаємо за наслідки, якщо через збіг паролів твоїм акаунтом десь скористаються треті особи.</p>
+            <button id="forcePasswordBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg transition">Встановити пароль і увійти</button>
+            <p id="forcePasswordError" class="text-xs text-red-400 mt-3 hidden"></p>
+        </div>
+    </div>
+
     <!-- ОСНОВНИЙ ДОДАТОК -->
     <div id="appShell" class="hidden max-w-6xl mx-auto">
         <div class="app-card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
@@ -177,6 +193,7 @@
                     <input type="password" id="newUserPassword" placeholder="Тимчасовий пароль">
                     <input type="text" id="newUserName" placeholder="Імʼя користувача (Нік)">
                 </div>
+                <p class="text-xs text-gray-500 mb-3">Це лише тимчасовий пароль на перший вхід — після нього систему одразу попросить встановити новий, який знатиме тільки сам користувач. Тому придумуй тут щось просте й довільне, а не пароль, яким людина реально користується деінде.</p>
                 <button id="createUserBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg">Створити акаунт</button>
                 <p id="createUserMsg" class="text-xs mt-2"></p>
             </div>
@@ -254,10 +271,21 @@
             myRoles = (roles || []).map(r => r.role_key); 
             allRoles = rolesCatalog || [];
 
+            if (myProfile.must_change_password) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('forcePasswordScreen').classList.remove('hidden');
+                return;
+            }
+
+            enterApp();
+        }
+
+        function enterApp() {
             document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('forcePasswordScreen').classList.add('hidden');
             document.getElementById('appShell').classList.remove('hidden');
             document.getElementById('userNameLabel').textContent = myProfile.display_name;
-            
+
             document.getElementById('userRoleBadges').innerHTML = myRoles.map(r => {
                 const label = allRoles.find(x => x.key === r)?.label || r;
                 return `<span class="role-badge">${label}</span>`;
@@ -266,8 +294,25 @@
             if (isAdmin()) document.getElementById('adminTabBtn').classList.remove('hidden');
             if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
 
-            await loadData();
+            loadData();
         }
+
+        document.getElementById('forcePasswordBtn').onclick = async () => {
+            const p1 = document.getElementById('newPassword1').value;
+            const p2 = document.getElementById('newPassword2').value;
+            const errEl = document.getElementById('forcePasswordError');
+            errEl.classList.add('hidden');
+
+            if (p1.length < 6) { errEl.textContent = 'Пароль має містити щонайменше 6 символів'; errEl.classList.remove('hidden'); return; }
+            if (p1 !== p2) { errEl.textContent = 'Паролі не збігаються — введи однаково в обидва поля'; errEl.classList.remove('hidden'); return; }
+
+            const { error: updateErr } = await sb.auth.updateUser({ password: p1 });
+            if (updateErr) { errEl.textContent = updateErr.message; errEl.classList.remove('hidden'); return; }
+
+            await sb.from('profiles').update({ must_change_password: false }).eq('id', myProfile.id);
+            myProfile.must_change_password = false;
+            enterApp();
+        };
 
         // --- TABS ---
         document.querySelectorAll('.tab-btn').forEach(btn => {

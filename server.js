@@ -59,7 +59,7 @@ app.post('/admin/create-user', requireAdmin, async (req, res) => {
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({ email: fakeEmail, password, email_confirm: true });
     if (createErr) return res.status(400).json({ error: createErr.message });
 
-    const { error: profileErr } = await supabaseAdmin.from('profiles').insert({ id: created.user.id, display_name });
+    const { error: profileErr } = await supabaseAdmin.from('profiles').insert({ id: created.user.id, display_name, must_change_password: true });
     if (profileErr) {
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
         return res.status(400).json({ error: profileErr.message });
