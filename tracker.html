@@ -524,11 +524,16 @@
             const rList = document.getElementById('systemRolesList');
             rList.innerHTML = allRoles.map(r => `<span class="chip">${r.label} <span class="id-tag">${r.key}</span></span>`).join('');
 
+            // Незалежний запит: адмінка має бачити ВСІХ користувачів (і активних,
+            // і деактивованих), навіть якщо ще жодного тайтла не створено.
+            const { data: everyProfile } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+            const allProfilesForAdmin = everyProfile || [];
+
             const { data: allUserRoles } = await sb.from('user_roles').select('*');
             const list = document.getElementById('usersList');
             list.innerHTML = '';
-            
-            allProfiles.forEach(p => {
+
+            allProfilesForAdmin.forEach(p => {
                 const rolesForUser = allUserRoles.filter(r => r.user_id === p.id).map(r => r.role_key);
                 const row = document.createElement('div');
                 row.className = 'sub-card p-3 flex items-center justify-between flex-wrap gap-2';
