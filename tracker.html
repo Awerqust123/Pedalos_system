@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedalos Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background-color: #111827; color: #f3f4f6; margin: 0; padding: 0; }
+        .app-card { background: #1f2937; border-radius: 16px; }
+        .sub-card { background: rgba(255,255,255,0.03); border: 1px solid #374151; border-radius: 12px; }
+        .chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 4px 10px; border-radius: 9999px; font-size: 12px; }
+        .chip button { color: #818cf8; cursor: pointer; font-weight: bold; }
+        .chip button:hover { color: #f87171; }
+        .id-tag { font-family: monospace; font-size: 10px; color: #6b7280; background: #111827; padding: 1px 6px; border-radius: 6px; }
+
+        table.tracker { border-collapse: separate; border-spacing: 0 8px; width: 100%; text-align: left; }
+        table.tracker th { font-size: 12px; color: #9ca3af; font-weight: 600; padding: 0 8px 4px; }
+        table.tracker td { padding: 4px; vertical-align: middle; }
+        .chapter-label { font-weight: 700; font-size: 14px; white-space: nowrap; }
+
+        .cell-badge {
+            width: 100%; min-height: 52px; border-radius: 10px; padding: 6px 8px;
+            cursor: pointer; border: 1px solid transparent; transition: transform 0.1s, border-color 0.15s;
+            display: flex; flex-direction: column; justify-content: center; gap: 2px;
+        }
+        .cell-badge:hover { transform: translateY(-1px); border-color: #6366f1; }
+        .status-not_started { background: rgba(107,114,128,0.15); }
+        .status-in_progress { background: rgba(234,179,8,0.15); }
+        .status-done { background: rgba(34,197,94,0.15); }
+        .cell-status-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .status-not_started .cell-status-label { color: #9ca3af; }
+        .status-in_progress .cell-status-label { color: #facc15; }
+        .status-done .cell-status-label { color: #4ade80; }
+        .cell-assignee { font-size: 12px; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .popover-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+        .popover { background: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; width: 340px; max-width: 100%; max-height: 90vh; overflow-y: auto; }
+
+        select, input[type="text"], input[type="password"] {
+            background: #111827; border: 1px solid #374151; color: #e5e7eb;
+            border-radius: 8px; padding: 6px 10px; font-size: 13px; width: 100%;
+        }
+        .empty-state { border: 1px dashed #374151; border-radius: 12px; color: #6b7280; }
+
+        .tab-btn { padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #9ca3af; cursor: pointer; transition: all 0.15s; }
+        .tab-btn.active { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .role-badge { font-size: 10px; background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 2px 8px; border-radius: 9999px; }
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- ЛОГІН -->
+    <div id="loginScreen" class="max-w-sm mx-auto mt-20">
+        <div class="app-card p-6 shadow-xl">
+            <div class="text-center mb-5">
+                <div class="text-3xl mb-1">📋</div>
+                <h1 class="text-lg font-bold">Pedalos Tracker</h1>
+                <p class="text-xs text-gray-400 mt-1">Увійди за своїм логіном</p>
+            </div>
+            <input type="text" id="loginUsername" placeholder="Логін (напр. ninja)" class="mb-3">
+            <input type="password" id="loginPassword" placeholder="Пароль" class="mb-3">
+            <button id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg transition">Увійти</button>
+            <p id="loginError" class="text-xs text-red-400 mt-3 hidden"></p>
+        </div>
+    </div>
+
+    <!-- ОСНОВНИЙ ДОДАТОК -->
+    <div id="appShell" class="hidden max-w-6xl mx-auto">
+        <div class="app-card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+                <div class="text-2xl">📋</div>
+                <div>
+                    <div class="font-bold text-sm" id="userNameLabel"></div>
+                    <div class="flex gap-1 flex-wrap mt-1" id="userRoleBadges"></div>
+                </div>
+            </div>
+            <button id="logoutBtn" class="text-xs text-gray-400 hover:text-red-400 transition">Вийти</button>
+        </div>
+
+        <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
+            <div class="tab-btn active whitespace-nowrap" data-tab="titles">Робочий стіл</div>
+            <div class="tab-btn hidden whitespace-nowrap" id="curatorTabBtn" data-tab="curator">Керування тайтлами</div>
+            <div class="tab-btn whitespace-nowrap" data-tab="jobs">Біржа</div>
+            <div class="tab-btn hidden whitespace-nowrap" id="adminTabBtn" data-tab="admin">Адмін-панель</div>
+        </div>
+
+        <!-- ТАЙТЛИ (Робоча зона) -->
+        <div id="tabTitles" class="tab-panel active app-card p-6">
+            <div class="flex items-center gap-3 mb-5 flex-wrap">
+                <select id="titleSelect" class="max-w-xs"></select>
+            </div>
+            <p id="noTitleState" class="empty-state text-sm text-center py-6">Тебе ще не додано на жоден тайтл.</p>
+            <div id="titleContent" class="hidden">
+                <div class="sub-card p-4 mb-6">
+                    <h2 class="font-semibold text-sm text-gray-300 mb-3">Команда тайтла</h2>
+                    <div id="titleMembers" class="flex flex-wrap gap-2 mb-3"></div>
+                    <div id="addMemberControls" class="hidden flex gap-2 flex-wrap mt-3 border-t border-gray-700 pt-3">
+                        <select id="addMemberUser" class="max-w-[180px]"></select>
+                        <select id="addMemberRole" class="max-w-[200px]"></select>
+                        <button id="addMemberBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg transition">Додати в команду</button>
+                    </div>
+                </div>
+
+                <div class="sub-card p-4 mb-6" id="addChapterWrap">
+                    <h2 class="font-semibold text-sm text-gray-300 mb-3">Додати розділ</h2>
+                    <div class="flex gap-2 flex-wrap">
+                        <input type="text" id="newChapterNumber" placeholder="Номер (напр. 14)" class="w-32">
+                        <button id="addChapterBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg transition">Додати</button>
+                    </div>
+                </div>
+
+                <h2 class="font-semibold text-sm text-gray-300 mb-2">Прогрес розділів</h2>
+                <div class="overflow-x-auto">
+                    <table class="tracker" id="trackerTable">
+                        <thead><tr><th>Розділ</th><th>Клін</th><th>Переклад</th><th>Редактура</th><th>Тайп</th><th>QC</th><th></th></tr></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- КЕРУВАННЯ ТАЙТЛАМИ (Аналітика для кураторів/адмінів) -->
+        <div id="tabCurator" class="tab-panel app-card p-6">
+            <div class="sub-card p-4 mb-6 hidden" id="createTitleForm">
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Створити новий тайтл</h2>
+                <div class="flex gap-2 flex-wrap">
+                    <input type="text" id="newTitleName" placeholder="Назва тайтла" class="w-48">
+                    <input type="text" id="newTitleDeadline" placeholder="Дедлайн (7 днів, місяць, без)" class="w-48">
+                    <button id="addTitleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg">Створити</button>
+                </div>
+            </div>
+            <h2 class="font-semibold text-sm text-gray-300 mb-3">Зведення по тайтлах</h2>
+            <div class="overflow-x-auto">
+                <table class="tracker bg-[#1f2937] w-full">
+                    <thead><tr><th>Тайтл</th><th>Дедлайн</th><th>Останній апдейт</th><th>Поточний етап (найновіший)</th></tr></thead>
+                    <tbody id="curatorTitlesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- БІРЖА -->
+        <div id="tabJobs" class="tab-panel app-card p-6">
+            <div id="curatorJobForm" class="hidden sub-card p-4 mb-6">
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Створити заявку</h2>
+                <div class="flex gap-2 flex-wrap mb-2">
+                    <select id="jobTitleSelect" class="max-w-[200px]"></select>
+                    <select id="jobRoleSelect" class="max-w-[200px]"></select>
+                </div>
+                <input type="text" id="jobNote" placeholder="Коротка нотатка (необовʼязково)" class="mb-2">
+                <button id="createJobBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-1.5 rounded-lg transition">Опублікувати</button>
+            </div>
+            <h2 class="font-semibold text-sm text-gray-300 mb-3">Відкриті заявки</h2>
+            <p id="jobsEmptyState" class="empty-state text-sm text-center py-6 hidden">Відкритих заявок немає.</p>
+            <div id="jobsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- АДМІН-ПАНЕЛЬ -->
+        <div id="tabAdmin" class="tab-panel app-card p-6">
+            <div class="sub-card p-4 mb-6">
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Управління ролями (Система)</h2>
+                <div class="flex gap-2 flex-wrap mb-3">
+                    <input type="text" id="newRoleKey" placeholder="Ключ (напр. sfx_draw)" class="w-32">
+                    <input type="text" id="newRoleLabel" placeholder="Назва (напр. Малювач звуків)" class="w-48">
+                    <button id="createRoleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg transition">Додати роль</button>
+                </div>
+                <div id="systemRolesList" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="sub-card p-4 mb-6">
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Створити акаунт</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    <input type="text" id="newUserLogin" placeholder="Логін (без пробілів)">
+                    <input type="password" id="newUserPassword" placeholder="Тимчасовий пароль">
+                    <input type="text" id="newUserName" placeholder="Імʼя користувача (Нік)">
+                </div>
+                <button id="createUserBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg">Створити акаунт</button>
+                <p id="createUserMsg" class="text-xs mt-2"></p>
+            </div>
+
+            <h2 class="font-semibold text-sm text-gray-300 mb-3">Усі акаунти команди</h2>
+            <div id="usersList" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- ПОПАП СТАТУСУ -->
+    <div id="popoverBackdrop" class="popover-backdrop hidden">
+        <div class="popover">
+            <div class="flex justify-between items-center mb-3">
+                <h3 id="popoverTitle" class="font-bold text-sm"></h3>
+                <button id="popoverClose" class="text-gray-400 hover:text-white text-lg leading-none">✕</button>
+            </div>
+            <label class="text-xs text-gray-400 block mb-1">Відповідальний</label>
+            <select id="popoverAssignee" class="mb-3"></select>
+            <label class="text-xs text-gray-400 block mb-1">Статус</label>
+            <select id="popoverStatus" class="mb-4">
+                <option value="not_started">Не почато</option><option value="in_progress">В процесі</option><option value="done">Готово</option>
+            </select>
+            <button id="popoverSave" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg transition">Зберегти</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // ВСТАВ ТУТ СВОЇ ПОСИЛАННЯ ТА КЛЮЧІ
+        // ==========================================
+        const SUPABASE_URL = "https://evuoulaybxtrrhpsfvja.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2dW91bGF5Ynh0cnJocHNmdmphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTE3NzYsImV4cCI6MjEwMDEyNzc3Nn0.I6AW6Pl9EO4c7scRmAAWV8OcMx_-YLR2wfBL0MJvkK0";
+        const ADMIN_SERVER_URL = "https://pedalos-adminsystem.onrender.com";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const STAGES = [
+            { key: "clean", label: "Клін" }, { key: "translate", label: "Переклад" },
+            { key: "edit", label: "Редактура" }, { key: "typeset", label: "Тайп" }, { key: "qc", label: "QC" }
+        ];
+
+        let session = null, myProfile = null, myRoles = [], allRoles = [], allProfiles = [], myTitles = [], selectedTitleId = null, titleMembers = [], chapters = [], statuses = [];
+
+        function isAdmin() { return myRoles.includes('admin'); }
+        function isCuratorOf(titleId) { return isAdmin() || titleMembers.some(m => m.title_id === titleId && m.user_id === myProfile.id && m.role_key === 'title_curator'); }
+        function isAnyCurator() { return isAdmin() || myRoles.includes('title_curator') || myRoles.some(r => r.includes('curator')); }
+
+        // --- AUTH ---
+        document.getElementById('loginBtn').onclick = async () => {
+            const login = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const email = `${login.toLowerCase().replace(/\\s+/g, '_')}@pedalos.team`; 
+            
+            const errEl = document.getElementById('loginError');
+            errEl.classList.add('hidden');
+
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) { errEl.textContent = 'Помилка: ' + error.message; errEl.classList.remove('hidden'); return; }
+            session = data.session; await afterLogin();
+        };
+
+        document.getElementById('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+
+        async function afterLogin() {
+            const { data: { user } } = await supabase.auth.getUser();
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+            const { data: roles } = await supabase.from('user_roles').select('role_key').eq('user_id', user.id);
+            const { data: rolesCatalog } = await supabase.from('roles').select('*');
+
+            myProfile = profile; 
+            myRoles = (roles || []).map(r => r.role_key); 
+            allRoles = rolesCatalog || [];
+
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appShell').classList.remove('hidden');
+            document.getElementById('userNameLabel').textContent = myProfile.display_name;
+            
+            document.getElementById('userRoleBadges').innerHTML = myRoles.map(r => {
+                const label = allRoles.find(x => x.key === r)?.label || r;
+                return `<span class="role-badge">${label}</span>`;
+            }).join('');
+
+            if (isAdmin()) document.getElementById('adminTabBtn').classList.remove('hidden');
+            if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
+
+            await loadData();
+        }
+
+        // --- TABS ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.tab-btn, .tab-panel').forEach(e => { e.classList.remove('active'); });
+                btn.classList.add('active');
+                document.getElementById('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
+                if (btn.dataset.tab === 'jobs') loadJobs();
+            };
+        });
+
+        // --- DATA LOAD ---
+        async function loadData() {
+            const { data: t } = await supabase.from('titles').select('*').order('name');
+            myTitles = t || [];
+            const sel = document.getElementById('titleSelect');
+            sel.innerHTML = myTitles.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            document.getElementById('noTitleState').classList.toggle('hidden', myTitles.length > 0);
+            
+            if (myTitles.length > 0) {
+                selectedTitleId = myTitles[0].id;
+                sel.value = selectedTitleId;
+                await loadTitleData();
+            }
+            if (isAnyCurator()) await loadCuratorDashboard();
+            if (isAdmin()) await loadAdmin();
+        }
+
+        document.getElementById('titleSelect').onchange = async (e) => { selectedTitleId = parseInt(e.target.value); await loadTitleData(); };
+
+        // --- ДЕТАЛІ ТАЙТЛА (Робоча зона) ---
+        async function loadTitleData() {
+            document.getElementById('titleContent').classList.remove('hidden');
+            const { data: mem } = await supabase.from('title_members').select('*').eq('title_id', selectedTitleId);
+            titleMembers = mem || [];
+            const { data: profs } = await supabase.from('profiles').select('*').eq('is_active', true);
+            allProfiles = profs || [];
+
+            const wrap = document.getElementById('titleMembers');
+            const curator = isCuratorOf(selectedTitleId);
+            document.getElementById('addMemberControls').classList.toggle('hidden', !curator);
+
+            wrap.innerHTML = titleMembers.map(m => {
+                const p = allProfiles.find(x => x.id === m.user_id);
+                const rLabel = allRoles.find(r => r.key === m.role_key)?.label || m.role_key;
+                let btn = curator ? `<button onclick="removeMember('${m.user_id}', '${m.role_key}')">✕</button>` : '';
+                return `<span class="chip">${p ? p.display_name : '...'} · ${rLabel} ${btn}</span>`;
+            }).join('');
+
+            if (curator) {
+                document.getElementById('addMemberUser').innerHTML = allProfiles.map(p => `<option value="${p.id}">${p.display_name}</option>`).join('');
+                document.getElementById('addMemberRole').innerHTML = allRoles.filter(r=>r.key !== 'admin').map(r => `<option value="${r.key}">${r.label}</option>`).join('');
+            }
+
+            const { data: ch } = await supabase.from('chapters').select('*').eq('title_id', selectedTitleId).order('number');
+            chapters = ch || [];
+            const { data: st } = chapters.length ? await supabase.from('stage_status').select('*').in('chapter_id', chapters.map(c=>c.id)) : {data:[]};
+            statuses = st || [];
+            
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            chapters.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true })).forEach(ch => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><span class="chapter-label">Розділ ${ch.number}</span></td>`;
+                
+                STAGES.forEach(stage => {
+                    const td = document.createElement('td');
+                    const row = statuses.find(s => s.chapter_id === ch.id && s.stage === stage.key);
+                    const status = row ? row.status : 'not_started';
+                    const assignee = row && row.assignee ? row.assignee : '—';
+                    td.innerHTML = `<div class="cell-badge status-${status}" onclick="openPopover(${ch.id}, '${stage.key}', '${assignee}', '${status}')">
+                        <span class="cell-status-label">${status === 'not_started' ? 'Не почато' : status === 'in_progress' ? 'В процесі' : 'Готово'}</span>
+                        <span class="cell-assignee">${assignee}</span>
+                    </div>`;
+                    tr.appendChild(td);
+                });
+
+                const delTd = document.createElement('td');
+                delTd.innerHTML = curator ? `<button onclick="deleteChapter(${ch.id})" class="text-gray-500 hover:text-red-400 text-xs px-2">✕</button>` : '';
+                tr.appendChild(delTd);
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('addMemberBtn').onclick = async () => {
+            const user_id = document.getElementById('addMemberUser').value;
+            const role_key = document.getElementById('addMemberRole').value;
+            await supabase.from('title_members').insert({ title_id: selectedTitleId, user_id, role_key });
+            await loadTitleData();
+        };
+
+        window.removeMember = async (uid, rKey) => {
+            await supabase.from('title_members').delete().eq('title_id', selectedTitleId).eq('user_id', uid).eq('role_key', rKey);
+            await loadTitleData();
+        };
+
+        document.getElementById('addChapterBtn').onclick = async () => {
+            const num = document.getElementById('newChapterNumber').value.trim();
+            if (!num) return;
+            const { data: nc } = await supabase.from('chapters').insert({ number: num, title_id: selectedTitleId }).select().single();
+            if (nc) {
+                const rows = STAGES.map(s => ({ chapter_id: nc.id, stage: s.key, status: 'not_started' }));
+                await supabase.from('stage_status').insert(rows);
+            }
+            document.getElementById('newChapterNumber').value = '';
+            await loadTitleData();
+        };
+
+        window.deleteChapter = async (id) => {
+            if(!confirm('Видалити розділ?')) return;
+            await supabase.from('chapters').delete().eq('id', id);
+            await loadTitleData();
+        };
+
+        // --- ПОПАП ---
+        let activeCell = null;
+        window.openPopover = (chapterId, stageKey, assignee, status) => {
+            activeCell = { chapterId, stageKey };
+            const cNum = chapters.find(c => c.id === chapterId)?.number;
+            const sLab = STAGES.find(s => s.key === stageKey)?.label;
+            document.getElementById('popoverTitle').textContent = `Розділ ${cNum} — ${sLab}`;
+            
+            const assigneeSelect = document.getElementById('popoverAssignee');
+            const membersHere = titleMembers.filter(m => m.title_id === selectedTitleId);
+            assigneeSelect.innerHTML = '<option value="">— не призначено —</option>' + membersHere.map(m => {
+                const name = allProfiles.find(p => p.id === m.user_id)?.display_name || m.user_id;
+                return `<option value="${name}">${name}</option>`;
+            }).join('');
+            
+            assigneeSelect.value = assignee !== '—' ? assignee : '';
+            document.getElementById('popoverStatus').value = status;
+            document.getElementById('popoverBackdrop').classList.remove('hidden');
+        };
+
+        document.getElementById('popoverClose').onclick = () => document.getElementById('popoverBackdrop').classList.add('hidden');
+        document.getElementById('popoverBackdrop').addEventListener('click', (e) => { if (e.target.id === 'popoverBackdrop') document.getElementById('popoverBackdrop').classList.add('hidden'); });
+
+        document.getElementById('popoverSave').onclick = async () => {
+            await supabase.from('stage_status').upsert({
+                chapter_id: activeCell.chapterId, stage: activeCell.stageKey,
+                assignee: document.getElementById('popoverAssignee').value || null,
+                status: document.getElementById('popoverStatus').value
+            }, { onConflict: 'chapter_id,stage' });
+            document.getElementById('popoverBackdrop').classList.add('hidden');
+            await loadTitleData();
+            if(isAnyCurator()) await loadCuratorDashboard(); 
+        };
+
+        // --- КЕРУВАННЯ ТАЙТЛАМИ (Аналітика) ---
+        async function loadCuratorDashboard() {
+            document.getElementById('createTitleForm').classList.toggle('hidden', !isAdmin());
+            const tbody = document.getElementById('curatorTitlesTableBody');
+            tbody.innerHTML = '';
+            
+            const { data: allStatuses } = await supabase.from('stage_status').select('updated_at, status, stage, chapter_id');
+            const { data: allChapters } = await supabase.from('chapters').select('id, title_id, number');
+
+            myTitles.forEach(title => {
+                const titleChapters = allChapters.filter(c => c.title_id === title.id);
+                const chapIds = titleChapters.map(c => c.id);
+                const titleStatuses = allStatuses.filter(s => chapIds.includes(s.chapter_id));
+                
+                titleStatuses.sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at));
+                const lastUpdate = titleStatuses.length > 0 ? new Date(titleStatuses[0].updated_at).toLocaleString('uk-UA', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Ще порожньо';
+                
+                let activeStage = 'Не визначено';
+                const active = titleStatuses.find(s => s.status === 'in_progress');
+                if (active) {
+                    const cNum = titleChapters.find(c => c.id === active.chapter_id)?.number;
+                    const sLabel = STAGES.find(x => x.key === active.stage)?.label;
+                    activeStage = `Розділ ${cNum} — ${sLabel}`;
+                }
+
+                const canEditDL = isAdmin();
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="font-bold">${title.name}</td>
+                    <td>
+                        ${canEditDL ? `<input type="text" class="w-24 bg-transparent border-b border-gray-600 px-1 text-xs text-center" value="${title.deadline_info || 'без'}" id="dl-${title.id}">
+                        <button onclick="updateDeadline(${title.id})" class="text-xs text-indigo-400 hover:text-indigo-300 ml-1">💾</button>` : `<span class="text-xs">${title.deadline_info || 'без'}</span>`}
+                    </td>
+                    <td class="text-xs text-gray-400">${lastUpdate}</td>
+                    <td class="text-xs text-yellow-400">${activeStage}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.updateDeadline = async (id) => {
+            const val = document.getElementById(`dl-${id}`).value;
+            await supabase.from('titles').update({ deadline_info: val }).eq('id', id);
+            alert('Дедлайн збережено');
+        };
+
+        document.getElementById('addTitleBtn').onclick = async () => {
+            const name = document.getElementById('newTitleName').value.trim();
+            const dl = document.getElementById('newTitleDeadline').value.trim() || 'без';
+            if (!name) return;
+            await supabase.from('titles').insert({ name, deadline_info: dl });
+            document.getElementById('newTitleName').value = '';
+            document.getElementById('newTitleDeadline').value = '';
+            await loadData();
+        };
+
+        // --- БІРЖА ---
+        async function loadJobs() {
+            const { data: tICurator } = await supabase.from('title_members').select('title_id').eq('user_id', myProfile.id).eq('role_key', 'title_curator');
+            const curT = (tICurator || []).map(t => myTitles.find(x => x.id === t.title_id)).filter(Boolean);
+            const canPost = isAdmin() || curT.length > 0;
+            
+            document.getElementById('curatorJobForm').classList.toggle('hidden', !canPost);
+            if (canPost) {
+                document.getElementById('jobTitleSelect').innerHTML = (isAdmin() ? myTitles : curT).map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+                document.getElementById('jobRoleSelect').innerHTML = allRoles.filter(r=>r.key!=='admin').map(r => `<option value="${r.key}">${r.label}</option>`).join('');
+            }
+
+            const { data: jobs } = await supabase.from('job_postings').select('*').eq('status', 'open').order('created_at', { ascending: false });
+            const list = document.getElementById('jobsList');
+            list.innerHTML = '';
+            document.getElementById('jobsEmptyState').classList.toggle('hidden', (jobs || []).length > 0);
+
+            (jobs || []).forEach(job => {
+                const tName = myTitles.find(t => t.id === job.title_id)?.name || `#${job.title_id}`;
+                const rLab = allRoles.find(r => r.key === job.role_needed)?.label || job.role_needed;
+                const card = document.createElement('div');
+                card.className = 'sub-card p-4';
+                card.innerHTML = `
+                    <div class="font-bold text-sm mb-1">${tName}</div>
+                    <div class="role-badge inline-block mb-2">${rLab}</div>
+                    <p class="text-xs text-gray-400 mb-3">${job.note || ''}</p>
+                    <button class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition">Відгукнутися</button>
+                `;
+                card.querySelector('button').onclick = async () => {
+                    const { error } = await supabase.from('job_applications').insert({ posting_id: job.id, applicant_id: myProfile.id });
+                    if (error) return alert(error.code === '23505' ? 'Ти вже відгукнувся.' : error.message);
+                    alert('Відгук надіслано!');
+                };
+                list.appendChild(card);
+            });
+        }
+        document.getElementById('createJobBtn').onclick = async () => {
+            const title_id = parseInt(document.getElementById('jobTitleSelect').value);
+            const role_needed = document.getElementById('jobRoleSelect').value;
+            const note = document.getElementById('jobNote').value.trim();
+            await supabase.from('job_postings').insert({ title_id, role_needed, note, created_by: myProfile.id });
+            document.getElementById('jobNote').value = '';
+            await loadJobs();
+        };
+
+        // --- АДМІН-ПАНЕЛЬ ---
+        function adminHeaders() { return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }; }
+
+        async function loadAdmin() {
+            const rList = document.getElementById('systemRolesList');
+            rList.innerHTML = allRoles.map(r => `<span class="chip">${r.label} <span class="id-tag">${r.key}</span></span>`).join('');
+
+            const { data: allUserRoles } = await supabase.from('user_roles').select('*');
+            const list = document.getElementById('usersList');
+            list.innerHTML = '';
+            
+            allProfiles.forEach(p => {
+                const rolesForUser = allUserRoles.filter(r => r.user_id === p.id).map(r => r.role_key);
+                const row = document.createElement('div');
+                row.className = 'sub-card p-3 flex items-center justify-between flex-wrap gap-2';
+                row.innerHTML = `
+                    <div>
+                        <div class="font-semibold text-sm">${p.display_name} ${p.is_active ? '' : '<span class="text-red-400 text-xs">(деактивовано)</span>'}</div>
+                        <div class="flex gap-1 flex-wrap mt-1" id="roles-${p.id}"></div>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <select class="role-add-select max-w-[160px] text-xs" data-uid="${p.id}"></select>
+                        <button class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded-lg transition deactivate-btn" data-active="${p.is_active}">${p.is_active ? 'Деактивувати' : 'Активувати'}</button>
+                        <button class="text-xs text-gray-500 hover:text-red-400 px-2 delete-btn">Видалити</button>
+                    </div>
+                `;
+                list.appendChild(row);
+
+                const rolesWrap = row.querySelector(`#roles-${p.id}`);
+                rolesForUser.forEach(rk => {
+                    const label = allRoles.find(r => r.key === rk)?.label || rk;
+                    const chip = document.createElement('span');
+                    chip.className = 'role-badge';
+                    chip.innerHTML = `${label} <button style="margin-left:4px;color:#f87171;cursor:pointer;">✕</button>`;
+                    chip.querySelector('button').onclick = async () => {
+                        await supabase.from('user_roles').delete().eq('user_id', p.id).eq('role_key', rk);
+                        await loadAdmin();
+                    };
+                    rolesWrap.appendChild(chip);
+                });
+
+                const addSel = row.querySelector('.role-add-select');
+                addSel.innerHTML = '<option value="">+ додати роль</option>' + allRoles.filter(r => !rolesForUser.includes(r.key)).map(r => `<option value="${r.key}">${r.label}</option>`).join('');
+                addSel.onchange = async () => {
+                    if (!addSel.value) return;
+                    await supabase.from('user_roles').insert({ user_id: p.id, role_key: addSel.value });
+                    await loadAdmin();
+                };
+
+                row.querySelector('.deactivate-btn').onclick = async () => {
+                    const nowActive = row.querySelector('.deactivate-btn').dataset.active === 'true';
+                    await fetch(`${ADMIN_SERVER_URL}/admin/deactivate-user/${p.id}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ is_active: !nowActive }) });
+                    await loadData();
+                };
+                row.querySelector('.delete-btn').onclick = async () => {
+                    if (!confirm(`Видалити акаунт "${p.display_name}"? Дані неможливо відновити.`)) return;
+                    await fetch(`${ADMIN_SERVER_URL}/admin/delete-user/${p.id}`, { method: 'DELETE', headers: adminHeaders() });
+                    await loadData();
+                };
+            });
+        }
+
+        document.getElementById('createRoleBtn').onclick = async () => {
+            const key = document.getElementById('newRoleKey').value.trim();
+            const label = document.getElementById('newRoleLabel').value.trim();
+            if(!key || !label) return;
+            await supabase.from('roles').insert({ key, label });
+            document.getElementById('newRoleKey').value = ''; document.getElementById('newRoleLabel').value = '';
+            const { data } = await supabase.from('roles').select('*'); allRoles = data; 
+            await loadAdmin();
+        };
+
+        document.getElementById('createUserBtn').onclick = async () => {
+            const login = document.getElementById('newUserLogin').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const display_name = document.getElementById('newUserName').value.trim();
+            const msg = document.getElementById('createUserMsg');
+            
+            msg.textContent = 'Створюємо...'; msg.className = 'text-xs mt-2 text-gray-400';
+            
+            const res = await fetch(`${ADMIN_SERVER_URL}/admin/create-user`, {
+                method: 'POST', headers: adminHeaders(), body: JSON.stringify({ username: login, password, display_name })
+            });
+            const data = await res.json();
+            
+            if (data.error) { msg.textContent = data.error; msg.className = 'text-xs mt-2 text-red-400'; return; }
+            
+            msg.textContent = `Акаунт ${data.display_name} створено! Логін: ${data.username}`; 
+            msg.className = 'text-xs mt-2 text-green-400';
+            
+            document.getElementById('newUserLogin').value = '';
+            document.getElementById('newUserPassword').value = '';
+            document.getElementById('newUserName').value = '';
+            
+            await loadData(); 
+        };
+
+        // Init
+        (async function init() {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) { session = data.session; await afterLogin(); }
+        })();
+    </script>
+</body>
+</html>
