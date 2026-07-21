@@ -278,6 +278,7 @@
         ];
 
         let session = null, myProfile = null, myRoles = [], allRoles = [], allProfiles = [], myTitles = [], selectedTitleId = null, titleMembers = [], chapters = [], statuses = [];
+        let myJobPostings = [], unseenApplicationsByPosting = {}, notifyPollTimer = null;
 
         function isAdmin() { return myRoles.includes('admin'); }
         function isCuratorOf(titleId) { return isAdmin() || titleMembers.some(m => m.title_id === titleId && m.user_id === myProfile.id && m.role_key === 'title_curator'); }
@@ -336,6 +337,12 @@
             if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
 
             loadData();
+
+            // Періодично перевіряємо, чи не з'явилися нові відгуки на біржі —
+            // щоб червоний кружечок біля "Біржа" оновлювався, навіть якщо
+            // куратор сидить на іншій вкладці.
+            if (notifyPollTimer) clearInterval(notifyPollTimer);
+            notifyPollTimer = setInterval(refreshJobNotifications, 20000);
         }
 
         document.getElementById('forcePasswordBtn').onclick = async () => {
@@ -560,6 +567,34 @@
         };
 
         // --- БІРЖА ---
+
+        // Перевіряє, чи є непереглянуті відгуки на заявки, які я створив (як куратор),
+        // і оновлює червоний кружечок біля "Біржа" в навігації + рахунок по кожній заявці.
+        async function refreshJobNotifications() {
+            unseenApplicationsByPosting = {};
+            if (!myProfile) return;
+
+            const { data: postings } = await sb.from('job_postings').select('id').eq('created_by', myProfile.id);
+            myJobPostings = postings || [];
+            const postingIds = myJobPostings.map(p => p.id);
+
+            let unseenTotal = 0;
+            if (postingIds.length) {
+                const { data: unseen } = await sb.from('job_applications')
+                    .select('id, posting_id')
+                    .in('posting_id', postingIds)
+                    .eq('seen_by_curator', false);
+                (unseen || []).forEach(a => {
+                    unseenApplicationsByPosting[a.posting_id] = (unseenApplicationsByPosting[a.posting_id] || 0) + 1;
+                    unseenTotal++;
+                });
+            }
+
+            const navBadge = document.getElementById('jobsNavBadge');
+            navBadge.textContent = '!';
+            navBadge.classList.toggle('hidden', unseenTotal === 0);
+        }
+
         async function loadJobs() {
             const { data: tICurator } = await sb.from('title_members').select('title_id').eq('user_id', myProfile.id).eq('role_key', 'title_curator');
             const curT = (tICurator || []).map(t => myTitles.find(x => x.id === t.title_id)).filter(Boolean);
@@ -571,12 +606,43 @@
                 document.getElementById('jobRoleSelect').innerHTML = allRoles.filter(r=>r.key!=='admin').map(r => `<option value="${r.key}">${r.label}</option>`).join('');
             }
 
+            await refreshJobNotifications();
+
+            // --- Мої заявки (ті, що я, як куратор, опублікував) ---
+            const mySection = document.getElementById('myJobsSection');
+            const myList = document.getElementById('myJobsList');
+            myList.innerHTML = '';
+            if (myJobPostings.length > 0) {
+                const { data: myFullPostings } = await sb.from('job_postings').select('*').in('id', myJobPostings.map(p => p.id)).order('created_at', { ascending: false });
+                mySection.classList.remove('hidden');
+                (myFullPostings || []).forEach(job => {
+                    const tName = myTitles.find(t => t.id === job.title_id)?.name || `#${job.title_id}`;
+                    const rLab = allRoles.find(r => r.key === job.role_needed)?.label || job.role_needed;
+                    const unseen = unseenApplicationsByPosting[job.id] || 0;
+                    const card = document.createElement('div');
+                    card.className = 'sub-card p-4 job-card clickable';
+                    card.innerHTML = `
+                        ${unseen > 0 ? '<span class="notify-dot">!</span>' : ''}
+                        <div class="font-bold text-sm mb-1">${tName}</div>
+                        <div class="role-badge inline-block mb-2">${rLab}</div>
+                        <p class="text-xs text-gray-400 mb-1">${job.note || ''}</p>
+                        <p class="text-xs ${job.status === 'open' ? 'text-green-400' : 'text-gray-500'}">${job.status === 'open' ? 'Відкрита' : 'Закрита'}</p>
+                    `;
+                    card.onclick = () => openApplicantsPopover(job);
+                    myList.appendChild(card);
+                });
+            } else {
+                mySection.classList.add('hidden');
+            }
+
+            // --- Відкриті заявки інших кураторів ---
             const { data: jobs } = await sb.from('job_postings').select('*').eq('status', 'open').order('created_at', { ascending: false });
             const list = document.getElementById('jobsList');
             list.innerHTML = '';
-            document.getElementById('jobsEmptyState').classList.toggle('hidden', (jobs || []).length > 0);
+            const openJobs = (jobs || []).filter(j => j.created_by !== myProfile.id);
+            document.getElementById('jobsEmptyState').classList.toggle('hidden', openJobs.length > 0);
 
-            (jobs || []).forEach(job => {
+            openJobs.forEach(job => {
                 const tName = myTitles.find(t => t.id === job.title_id)?.name || `#${job.title_id}`;
                 const rLab = allRoles.find(r => r.key === job.role_needed)?.label || job.role_needed;
                 const card = document.createElement('div');
@@ -603,6 +669,97 @@
             document.getElementById('jobNote').value = '';
             await loadJobs();
         };
+
+        // --- ПОПАП: хто відгукнувся на мою заявку ---
+        let activeJob = null;
+        async function openApplicantsPopover(job) {
+            activeJob = job;
+            const tName = myTitles.find(t => t.id === job.title_id)?.name || `#${job.title_id}`;
+            const rLab = allRoles.find(r => r.key === job.role_needed)?.label || job.role_needed;
+            document.getElementById('applicantsPopoverTitle').textContent = `${tName} — ${rLab}`;
+
+            const { data: apps } = await sb.from('job_applications').select('*').eq('posting_id', job.id).order('created_at', { ascending: true });
+            const applicantIds = (apps || []).map(a => a.applicant_id);
+
+            let applicantProfiles = [];
+            let applicantRolesMap = {};
+            if (applicantIds.length) {
+                const { data: profs } = await sb.from('profiles').select('*').in('id', applicantIds);
+                applicantProfiles = profs || [];
+                const { data: rolesRows } = await sb.from('user_roles').select('*').in('user_id', applicantIds);
+                (rolesRows || []).forEach(r => {
+                    if (!applicantRolesMap[r.user_id]) applicantRolesMap[r.user_id] = [];
+                    applicantRolesMap[r.user_id].push(allRoles.find(x => x.key === r.role_key)?.label || r.role_key);
+                });
+            }
+
+            const listEl = document.getElementById('applicantsList');
+            listEl.innerHTML = '';
+            document.getElementById('applicantsEmpty').classList.toggle('hidden', (apps || []).length > 0);
+
+            (apps || []).forEach(a => {
+                const p = applicantProfiles.find(x => x.id === a.applicant_id);
+                const joined = p?.created_at ? new Date(p.created_at).toLocaleDateString('uk-UA') : '—';
+                const roleLabels = applicantRolesMap[a.applicant_id] || [];
+                const row = document.createElement('div');
+                row.className = 'sub-card p-3';
+                row.innerHTML = `
+                    <div class="font-semibold text-sm">${p ? p.display_name : 'Користувач видалений'}</div>
+                    <div class="text-xs text-gray-400 mb-1">У команді з: ${joined}</div>
+                    <div class="flex gap-1 flex-wrap">${roleLabels.map(l => `<span class="role-badge">${l}</span>`).join('') || '<span class="text-xs text-gray-500">без ролей</span>'}</div>
+                `;
+                listEl.appendChild(row);
+            });
+
+            document.getElementById('applicantsPopoverBackdrop').classList.remove('hidden');
+
+            // Позначаємо всі відгуки на цю заявку переглянутими — прибираємо повідомлення.
+            if ((apps || []).some(a => !a.seen_by_curator)) {
+                await sb.from('job_applications').update({ seen_by_curator: true }).eq('posting_id', job.id).eq('seen_by_curator', false);
+                await refreshJobNotifications();
+                await loadJobs();
+            }
+        }
+        document.getElementById('applicantsPopoverClose').onclick = () => document.getElementById('applicantsPopoverBackdrop').classList.add('hidden');
+        document.getElementById('applicantsPopoverBackdrop').addEventListener('click', (e) => { if (e.target.id === 'applicantsPopoverBackdrop') document.getElementById('applicantsPopoverBackdrop').classList.add('hidden'); });
+        document.getElementById('closeJobBtn').onclick = async () => {
+            if (!activeJob) return;
+            if (!confirm('Закрити цю заявку на біржі?')) return;
+            await sb.from('job_postings').update({ status: 'closed' }).eq('id', activeJob.id);
+            document.getElementById('applicantsPopoverBackdrop').classList.add('hidden');
+            await loadJobs();
+        };
+
+        // --- ПРОФІЛЬ ---
+        async function loadProfile() {
+            document.getElementById('profileName').textContent = myProfile.display_name;
+            const joined = myProfile.created_at ? new Date(myProfile.created_at).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+            document.getElementById('profileMeta').textContent = `У команді з ${joined}`;
+
+            document.getElementById('profileRoleBadges').innerHTML = myRoles.map(r => {
+                const label = allRoles.find(x => x.key === r)?.label || r;
+                return `<span class="role-badge">${label}</span>`;
+            }).join('') || '<span class="text-xs text-gray-500">Ролей ще не призначено</span>';
+
+            const { data: myMemberships } = await sb.from('title_members').select('*').eq('user_id', myProfile.id);
+            const wrap = document.getElementById('profileTitlesList');
+            wrap.innerHTML = '';
+            document.getElementById('profileTitlesEmpty').classList.toggle('hidden', (myMemberships || []).length > 0);
+
+            const { data: allTitlesForProfile } = await sb.from('titles').select('*');
+            (myMemberships || []).forEach(m => {
+                const t = (allTitlesForProfile || []).find(x => x.id === m.title_id);
+                const rLabel = allRoles.find(r => r.key === m.role_key)?.label || m.role_key;
+                const row = document.createElement('div');
+                row.className = 'sub-card p-3 flex items-center justify-between';
+                row.innerHTML = `<span class="font-semibold text-sm">${t ? t.name : `#${m.title_id}`}</span><span class="role-badge">${rLabel}</span>`;
+                wrap.appendChild(row);
+            });
+
+            const adminSection = document.getElementById('adminSectionInProfile');
+            adminSection.classList.toggle('hidden', !isAdmin());
+            if (isAdmin()) await loadAdmin();
+        }
 
         // --- АДМІН-ПАНЕЛЬ ---
         function adminHeaders() { return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }; }
