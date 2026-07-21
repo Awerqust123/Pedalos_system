@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pedalos Tracker</title>
+    <title>Pedalos Team</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -65,7 +65,7 @@
         <div class="app-card p-6 shadow-xl">
             <div class="text-center mb-5">
                 <div class="text-3xl mb-1">📋</div>
-                <h1 class="text-lg font-bold">Pedalos Tracker</h1>
+                <h1 class="text-lg font-bold">Pedalos Team</h1>
                 <p class="text-xs text-gray-400 mt-1">Увійди за своїм логіном</p>
             </div>
             <input type="text" id="loginUsername" placeholder="Логін (напр. ninja)" class="mb-3">
@@ -93,29 +93,48 @@
 
     <!-- ОСНОВНИЙ ДОДАТОК -->
     <div id="appShell" class="hidden max-w-6xl mx-auto">
-        <div class="app-card p-4 mb-4 relative">
+        <div class="app-card p-4 mb-4 relative flex items-center justify-between flex-wrap gap-3">
+            <div class="text-sm font-bold text-gray-300">Pedalos Team</div>
             <div id="userMenuTrigger" class="flex items-center gap-3 cursor-pointer select-none w-fit">
-                <div class="text-2xl">📋</div>
                 <div>
-                    <div class="font-bold text-sm" id="userNameLabel"></div>
-                    <div class="flex gap-1 flex-wrap mt-1" id="userRoleBadges"></div>
+                    <div class="font-bold text-sm text-right" id="userNameLabel"></div>
+                    <div class="flex gap-1 flex-wrap mt-1 justify-end" id="userRoleBadges"></div>
                 </div>
+                <div class="text-2xl">📋</div>
             </div>
-            <div id="userMenuDropdown" class="hidden" style="position:absolute; top:64px; left:16px; min-width:190px; background:#1f2937; border:1px solid #374151; border-radius:12px; padding:6px; z-index:40; box-shadow:0 10px 25px rgba(0,0,0,0.4);">
+            <div id="userMenuDropdown" class="hidden" style="position:absolute; top:64px; right:16px; min-width:190px; background:#1f2937; border:1px solid #374151; border-radius:12px; padding:6px; z-index:40; box-shadow:0 10px 25px rgba(0,0,0,0.4);">
                 <div id="userMenuProfileBtn" class="user-menu-item">Мій профіль</div>
                 <div id="userMenuLogoutBtn" class="user-menu-item text-red-400">Вийти</div>
             </div>
         </div>
 
         <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
-            <div class="tab-btn active whitespace-nowrap" id="titlesTabBtn" data-tab="titles">Робочий стіл</div>
+            <div class="tab-btn active whitespace-nowrap" id="homeTabBtn" data-tab="home">Головна</div>
+            <div class="tab-btn whitespace-nowrap" id="titlesTabBtn" data-tab="titles">Робочий стіл</div>
             <div class="tab-btn hidden whitespace-nowrap" id="curatorTabBtn" data-tab="curator">Керування тайтлами</div>
             <div class="tab-btn whitespace-nowrap" id="jobsTabBtn" data-tab="jobs">Біржа<span id="jobsNavBadge" class="notify-dot hidden"></span></div>
-            <div class="tab-btn whitespace-nowrap" id="hubTabBtn" data-tab="hub">Хаб знань</div>
+            <a href="https://forgolka.github.io/PedalosGuides/index.html" target="_blank" rel="noopener" class="tab-btn whitespace-nowrap" id="hubTabBtn">Хаб знань ↗</a>
+        </div>
+
+        <!-- ГОЛОВНА -->
+        <div id="tabHome" class="tab-panel active app-card p-6">
+            <h2 class="font-semibold text-base mb-1">Привіт, <span id="homeUserName"></span> 👋</h2>
+            <p class="text-xs text-gray-400 mb-6">Коротке зведення по команді</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="sub-card p-5">
+                    <div class="text-xs text-gray-400 mb-1">Розділів завершено за останній місяць</div>
+                    <div class="text-3xl font-bold text-indigo-400" id="homeCompletedCount">—</div>
+                </div>
+                <div class="sub-card p-5">
+                    <div class="text-xs text-gray-400 mb-1">Останній завершений розділ</div>
+                    <div class="text-lg font-bold" id="homeLastChapter">—</div>
+                    <div class="text-xs text-gray-500 mt-1" id="homeLastChapterDate"></div>
+                </div>
+            </div>
         </div>
 
         <!-- ТАЙТЛИ (Робоча зона) -->
-        <div id="tabTitles" class="tab-panel active app-card p-6">
+        <div id="tabTitles" class="tab-panel app-card p-6">
             <div class="flex items-center gap-3 mb-5 flex-wrap">
                 <select id="titleSelect" class="max-w-xs"></select>
             </div>
@@ -190,15 +209,12 @@
             <div id="jobsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
 
-        <!-- ХАБ ЗНАНЬ -->
-        <div id="tabHub" class="tab-panel app-card p-4">
-            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h2 class="font-semibold text-sm text-gray-300">Хаб знань — гайди команди</h2>
-                <a href="https://forgolka.github.io/PedalosGuides/index.html" target="_blank" rel="noopener" class="text-xs text-indigo-400 hover:text-indigo-300 transition">Відкрити в новій вкладці ↗</a>
-            </div>
-            <div class="sub-card overflow-hidden" style="height:75vh;">
-                <iframe src="https://forgolka.github.io/PedalosGuides/index.html" title="Хаб знань" style="width:100%; height:100%; border:0;"></iframe>
-            </div>
+        <!-- ВІТАННЯ ДЛЯ НОВАЧКІВ -->
+        <div id="tabWelcome" class="tab-panel app-card p-8 text-center">
+            <div class="text-4xl mb-3">👋</div>
+            <h2 class="font-bold text-lg mb-2">Ласкаво просимо в Pedalos Team!</h2>
+            <p class="text-sm text-gray-400 max-w-md mx-auto mb-6">Твій акаунт щойно створили. Перш ніж отримати доступ до робочих інструментів команди, ознайомся з хабом знань — там усі гайди, які знадобляться в роботі. Коли будеш готовий, адміністратор відкриє тобі потрібний розділ.</p>
+            <a href="https://forgolka.github.io/PedalosGuides/index.html" target="_blank" rel="noopener" class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-5 py-2.5 rounded-lg transition">Перейти до хабу знань ↗</a>
         </div>
 
         <!-- ПРОФІЛЬ -->
@@ -362,6 +378,7 @@
             document.getElementById('forcePasswordScreen').classList.add('hidden');
             document.getElementById('appShell').classList.remove('hidden');
             document.getElementById('userNameLabel').textContent = myProfile.display_name;
+            document.getElementById('homeUserName').textContent = myProfile.display_name;
 
             document.getElementById('userRoleBadges').innerHTML = myRoles.map(r => {
                 const label = allRoles.find(x => x.key === r)?.label || r;
@@ -370,13 +387,16 @@
 
             if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
 
-            // Новачки бачать лише "Хаб знань" — доки адмін не зніме роль
-            // "Новачок" і не видасть їм робочу роль.
+            // Новачки не бачать жодної робочої вкладки — лише екран-привітання
+            // з посиланням на хаб знань, доки адмін не зніме роль "Новачок"
+            // і не видасть їм робочу роль.
             if (isNewbie()) {
+                document.getElementById('homeTabBtn').classList.add('hidden');
                 document.getElementById('titlesTabBtn').classList.add('hidden');
                 document.getElementById('curatorTabBtn').classList.add('hidden');
                 document.getElementById('jobsTabBtn').classList.add('hidden');
-                switchTab('hub');
+                document.querySelectorAll('.tab-btn, .tab-panel').forEach(e => e.classList.remove('active'));
+                document.getElementById('tabWelcome').classList.add('active');
             }
 
             loadData();
@@ -411,17 +431,63 @@
             const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
             if (btn) btn.classList.add('active');
             document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+            if (tabName === 'home') loadHome();
             if (tabName === 'jobs') loadJobs();
             if (tabName === 'profile') loadProfile();
         }
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        // Тільки елементи з data-tab перемикають внутрішні вкладки; посилання на
+        // "Хаб знань" — звичайний <a target="_blank"> і відкривається окремою сторінкою.
+        document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
             btn.onclick = () => switchTab(btn.dataset.tab);
         });
 
+        // --- ГОЛОВНА (зведення по команді) ---
+        async function loadHome() {
+            const { data: allChapters } = await sb.from('chapters').select('id, number, title_id');
+            const { data: allStatuses } = await sb.from('stage_status').select('chapter_id, stage, status, updated_at');
+
+            const byChapter = {};
+            (allStatuses || []).forEach(s => {
+                if (!byChapter[s.chapter_id]) byChapter[s.chapter_id] = [];
+                byChapter[s.chapter_id].push(s);
+            });
+
+            const completed = [];
+            (allChapters || []).forEach(ch => {
+                const rows = byChapter[ch.id] || [];
+                if (rows.length === STAGES.length && rows.every(r => r.status === 'done')) {
+                    const completedAt = rows.reduce((max, r) => {
+                        const d = new Date(r.updated_at);
+                        return d > max ? d : max;
+                    }, new Date(0));
+                    completed.push({ chapter: ch, completedAt });
+                }
+            });
+            completed.sort((a, b) => b.completedAt - a.completedAt);
+
+            const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const completedLastMonth = completed.filter(c => c.completedAt >= monthAgo).length;
+            document.getElementById('homeCompletedCount').textContent = completedLastMonth;
+
+            const lastLabel = document.getElementById('homeLastChapter');
+            const lastDate = document.getElementById('homeLastChapterDate');
+            if (completed.length > 0) {
+                const last = completed[0];
+                const tName = (allTitlesCache.find(t => t.id === last.chapter.title_id) || {}).name || `#${last.chapter.title_id}`;
+                lastLabel.textContent = `${tName} — Розділ ${last.chapter.number}`;
+                lastDate.textContent = last.completedAt.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } else {
+                lastLabel.textContent = 'Ще немає завершених розділів';
+                lastDate.textContent = '';
+            }
+        }
+
         // --- DATA LOAD ---
+        let allTitlesCache = [];
         async function loadData() {
             const { data: t } = await sb.from('titles').select('*').order('name');
             myTitles = t || [];
+            allTitlesCache = myTitles;
             const sel = document.getElementById('titleSelect');
             sel.innerHTML = myTitles.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
             document.getElementById('noTitleState').classList.toggle('hidden', myTitles.length > 0);
@@ -433,6 +499,7 @@
             }
             if (isAnyCurator()) await loadCuratorDashboard();
             await refreshJobNotifications();
+            if (!isNewbie()) await loadHome();
         }
 
         document.getElementById('titleSelect').onchange = async (e) => { selectedTitleId = parseInt(e.target.value); await loadTitleData(); };
