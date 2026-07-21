@@ -44,11 +44,7 @@
         }
         .empty-state { border: 1px dashed #374151; border-radius: 12px; color: #6b7280; }
 
-        .tab-btn { position: relative; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #9ca3af; cursor: pointer; transition: all 0.15s; }
-        .notify-dot { position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px; background: #ef4444; color: #fff; border-radius: 9999px; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
-        .job-card { position: relative; cursor: default; }
-        .job-card.clickable { cursor: pointer; transition: border-color 0.15s; }
-        .job-card.clickable:hover { border-color: #6366f1; }
+        .tab-btn { padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #9ca3af; cursor: pointer; transition: all 0.15s; }
         .tab-btn.active { background: rgba(99,102,241,0.15); color: #a5b4fc; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -104,8 +100,8 @@
         <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
             <div class="tab-btn active whitespace-nowrap" data-tab="titles">Робочий стіл</div>
             <div class="tab-btn hidden whitespace-nowrap" id="curatorTabBtn" data-tab="curator">Керування тайтлами</div>
-            <div class="tab-btn whitespace-nowrap" data-tab="jobs">Біржа<span id="jobsNavBadge" class="notify-dot hidden"></span></div>
-            <div class="tab-btn whitespace-nowrap" data-tab="profile">Профіль</div>
+            <div class="tab-btn whitespace-nowrap" data-tab="jobs">Біржа</div>
+            <div class="tab-btn hidden whitespace-nowrap" id="adminTabBtn" data-tab="admin">Адмін-панель</div>
         </div>
 
         <!-- ТАЙТЛИ (Робоча зона) -->
@@ -173,75 +169,37 @@
                 <input type="text" id="jobNote" placeholder="Коротка нотатка (необовʼязково)" class="mb-2">
                 <button id="createJobBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-1.5 rounded-lg transition">Опублікувати</button>
             </div>
-
-            <div id="myJobsSection" class="hidden mb-6">
-                <h2 class="font-semibold text-sm text-gray-300 mb-3">Мої заявки</h2>
-                <div id="myJobsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-            </div>
-
             <h2 class="font-semibold text-sm text-gray-300 mb-3">Відкриті заявки</h2>
             <p id="jobsEmptyState" class="empty-state text-sm text-center py-6 hidden">Відкритих заявок немає.</p>
             <div id="jobsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
 
-        <!-- ПРОФІЛЬ -->
-        <div id="tabProfile" class="tab-panel app-card p-6">
+        <!-- АДМІН-ПАНЕЛЬ -->
+        <div id="tabAdmin" class="tab-panel app-card p-6">
             <div class="sub-card p-4 mb-6">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="text-2xl">👤</div>
-                    <div>
-                        <div class="font-bold text-base" id="profileName"></div>
-                        <div class="text-xs text-gray-400" id="profileMeta"></div>
-                    </div>
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Управління ролями (Система)</h2>
+                <div class="flex gap-2 flex-wrap mb-3">
+                    <input type="text" id="newRoleKey" placeholder="Ключ (напр. sfx_draw)" class="w-32">
+                    <input type="text" id="newRoleLabel" placeholder="Назва (напр. Малювач звуків)" class="w-48">
+                    <button id="createRoleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg transition">Додати роль</button>
                 </div>
-                <div class="flex gap-1 flex-wrap" id="profileRoleBadges"></div>
+                <div id="systemRolesList" class="flex flex-wrap gap-2"></div>
             </div>
 
             <div class="sub-card p-4 mb-6">
-                <h2 class="font-semibold text-sm text-gray-300 mb-3">Мої тайтли</h2>
-                <div id="profileTitlesList" class="space-y-2"></div>
-                <p id="profileTitlesEmpty" class="empty-state text-sm text-center py-4 hidden">Тебе ще не додано на жоден тайтл.</p>
-            </div>
-
-            <div id="adminSectionInProfile" class="hidden">
-                <div class="sub-card p-4 mb-6">
-                    <h2 class="font-semibold text-sm text-gray-300 mb-3">Управління ролями (Система)</h2>
-                    <div class="flex gap-2 flex-wrap mb-3">
-                        <input type="text" id="newRoleKey" placeholder="Ключ (напр. sfx_draw)" class="w-32">
-                        <input type="text" id="newRoleLabel" placeholder="Назва (напр. Малювач звуків)" class="w-48">
-                        <button id="createRoleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg transition">Додати роль</button>
-                    </div>
-                    <div id="systemRolesList" class="flex flex-wrap gap-2"></div>
+                <h2 class="font-semibold text-sm text-gray-300 mb-3">Створити акаунт</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    <input type="text" id="newUserLogin" placeholder="Логін (без пробілів)">
+                    <input type="password" id="newUserPassword" placeholder="Тимчасовий пароль">
+                    <input type="text" id="newUserName" placeholder="Імʼя користувача (Нік)">
                 </div>
-
-                <div class="sub-card p-4 mb-6">
-                    <h2 class="font-semibold text-sm text-gray-300 mb-3">Створити акаунт</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                        <input type="text" id="newUserLogin" placeholder="Логін (без пробілів)">
-                        <input type="password" id="newUserPassword" placeholder="Тимчасовий пароль">
-                        <input type="text" id="newUserName" placeholder="Імʼя користувача (Нік)">
-                    </div>
-                    <p class="text-xs text-gray-500 mb-3">Це лише тимчасовий пароль на перший вхід — після нього систему одразу попросить встановити новий, який знатиме тільки сам користувач. Тому придумуй тут щось просте й довільне, а не пароль, яким людина реально користується деінде.</p>
-                    <button id="createUserBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg">Створити акаунт</button>
-                    <p id="createUserMsg" class="text-xs mt-2"></p>
-                </div>
-
-                <h2 class="font-semibold text-sm text-gray-300 mb-3">Усі акаунти команди</h2>
-                <div id="usersList" class="space-y-2"></div>
+                <p class="text-xs text-gray-500 mb-3">Це лише тимчасовий пароль на перший вхід — після нього систему одразу попросить встановити новий, який знатиме тільки сам користувач. Тому придумуй тут щось просте й довільне, а не пароль, яким людина реально користується деінде.</p>
+                <button id="createUserBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-1.5 rounded-lg">Створити акаунт</button>
+                <p id="createUserMsg" class="text-xs mt-2"></p>
             </div>
-        </div>
-    </div>
 
-    <!-- ПОПАП ЗАЯВНИКІВ -->
-    <div id="applicantsPopoverBackdrop" class="popover-backdrop hidden">
-        <div class="popover">
-            <div class="flex justify-between items-center mb-3">
-                <h3 id="applicantsPopoverTitle" class="font-bold text-sm"></h3>
-                <button id="applicantsPopoverClose" class="text-gray-400 hover:text-white text-lg leading-none">✕</button>
-            </div>
-            <div id="applicantsList" class="space-y-2 mb-3"></div>
-            <p id="applicantsEmpty" class="empty-state text-xs text-center py-4 hidden">Ще ніхто не відгукнувся.</p>
-            <button id="closeJobBtn" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded-lg transition">Закрити заявку</button>
+            <h2 class="font-semibold text-sm text-gray-300 mb-3">Усі акаунти команди</h2>
+            <div id="usersList" class="space-y-2"></div>
         </div>
     </div>
 
@@ -333,6 +291,7 @@
                 return `<span class="role-badge">${label}</span>`;
             }).join('');
 
+            if (isAdmin()) document.getElementById('adminTabBtn').classList.remove('hidden');
             if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
 
             loadData();
@@ -362,7 +321,6 @@
                 btn.classList.add('active');
                 document.getElementById('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
                 if (btn.dataset.tab === 'jobs') loadJobs();
-                if (btn.dataset.tab === 'profile') loadProfile();
             };
         });
 
@@ -380,7 +338,7 @@
                 await loadTitleData();
             }
             if (isAnyCurator()) await loadCuratorDashboard();
-            await refreshJobNotifications();
+            if (isAdmin()) await loadAdmin();
         }
 
         document.getElementById('titleSelect').onchange = async (e) => { selectedTitleId = parseInt(e.target.value); await loadTitleData(); };
