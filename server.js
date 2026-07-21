@@ -64,6 +64,14 @@ app.post('/admin/create-user', requireAdmin, async (req, res) => {
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
         return res.status(400).json({ error: profileErr.message });
     }
+
+    // Кожен новий акаунт стартує з роллю "Новачок" — доступ лише до хабу знань,
+    // доки адмін не зніме її та не видасть робочу роль.
+    const { error: roleErr } = await supabaseAdmin.from('user_roles').insert({ user_id: created.user.id, role_key: 'newbie' });
+    if (roleErr) {
+        console.error('Не вдалося призначити роль "newbie" новому користувачу:', roleErr.message);
+    }
+
     res.json({ id: created.user.id, username, display_name });
 });
 

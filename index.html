@@ -53,6 +53,9 @@
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
         .role-badge { font-size: 10px; background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 2px 8px; border-radius: 9999px; }
+        .user-menu-item { padding: 10px 14px; font-size: 13px; border-radius: 8px; cursor: pointer; color: #e5e7eb; transition: background 0.1s; }
+        .user-menu-item:hover { background: rgba(255,255,255,0.06); }
+        .user-menu-item + .user-menu-item { margin-top: 2px; }
     </style>
 </head>
 <body class="p-4">
@@ -90,22 +93,25 @@
 
     <!-- ОСНОВНИЙ ДОДАТОК -->
     <div id="appShell" class="hidden max-w-6xl mx-auto">
-        <div class="app-card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
-            <div class="flex items-center gap-3">
+        <div class="app-card p-4 mb-4 relative">
+            <div id="userMenuTrigger" class="flex items-center gap-3 cursor-pointer select-none w-fit">
                 <div class="text-2xl">📋</div>
                 <div>
                     <div class="font-bold text-sm" id="userNameLabel"></div>
                     <div class="flex gap-1 flex-wrap mt-1" id="userRoleBadges"></div>
                 </div>
             </div>
-            <button id="logoutBtn" class="text-xs text-gray-400 hover:text-red-400 transition">Вийти</button>
+            <div id="userMenuDropdown" class="hidden" style="position:absolute; top:64px; left:16px; min-width:190px; background:#1f2937; border:1px solid #374151; border-radius:12px; padding:6px; z-index:40; box-shadow:0 10px 25px rgba(0,0,0,0.4);">
+                <div id="userMenuProfileBtn" class="user-menu-item">Мій профіль</div>
+                <div id="userMenuLogoutBtn" class="user-menu-item text-red-400">Вийти</div>
+            </div>
         </div>
 
         <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
-            <div class="tab-btn active whitespace-nowrap" data-tab="titles">Робочий стіл</div>
+            <div class="tab-btn active whitespace-nowrap" id="titlesTabBtn" data-tab="titles">Робочий стіл</div>
             <div class="tab-btn hidden whitespace-nowrap" id="curatorTabBtn" data-tab="curator">Керування тайтлами</div>
-            <div class="tab-btn whitespace-nowrap" data-tab="jobs">Біржа<span id="jobsNavBadge" class="notify-dot hidden"></span></div>
-            <div class="tab-btn whitespace-nowrap" data-tab="profile">Профіль</div>
+            <div class="tab-btn whitespace-nowrap" id="jobsTabBtn" data-tab="jobs">Біржа<span id="jobsNavBadge" class="notify-dot hidden"></span></div>
+            <div class="tab-btn whitespace-nowrap" id="hubTabBtn" data-tab="hub">Хаб знань</div>
         </div>
 
         <!-- ТАЙТЛИ (Робоча зона) -->
@@ -182,6 +188,17 @@
             <h2 class="font-semibold text-sm text-gray-300 mb-3">Відкриті заявки</h2>
             <p id="jobsEmptyState" class="empty-state text-sm text-center py-6 hidden">Відкритих заявок немає.</p>
             <div id="jobsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- ХАБ ЗНАНЬ -->
+        <div id="tabHub" class="tab-panel app-card p-4">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 class="font-semibold text-sm text-gray-300">Хаб знань — гайди команди</h2>
+                <a href="https://forgolka.github.io/PedalosGuides/index.html" target="_blank" rel="noopener" class="text-xs text-indigo-400 hover:text-indigo-300 transition">Відкрити в новій вкладці ↗</a>
+            </div>
+            <div class="sub-card overflow-hidden" style="height:75vh;">
+                <iframe src="https://forgolka.github.io/PedalosGuides/index.html" title="Хаб знань" style="width:100%; height:100%; border:0;"></iframe>
+            </div>
         </div>
 
         <!-- ПРОФІЛЬ -->
@@ -281,6 +298,7 @@
         let myJobPostings = [], unseenApplicationsByPosting = {}, notifyPollTimer = null;
 
         function isAdmin() { return myRoles.includes('admin'); }
+        function isNewbie() { return myRoles.includes('newbie'); }
         function isCuratorOf(titleId) { return isAdmin() || titleMembers.some(m => m.title_id === titleId && m.user_id === myProfile.id && m.role_key === 'title_curator'); }
         function isAnyCurator() { return isAdmin() || myRoles.includes('title_curator') || myRoles.some(r => r.includes('curator')); }
 
@@ -302,7 +320,23 @@
             session = data.session; await afterLogin();
         };
 
-        document.getElementById('logoutBtn').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+        // --- МЕНЮ ПРОФІЛЮ (дропдаун) ---
+        document.getElementById('userMenuTrigger').onclick = (e) => {
+            e.stopPropagation();
+            document.getElementById('userMenuDropdown').classList.toggle('hidden');
+        };
+        document.addEventListener('click', (e) => {
+            const dd = document.getElementById('userMenuDropdown');
+            const trigger = document.getElementById('userMenuTrigger');
+            if (!dd.classList.contains('hidden') && !dd.contains(e.target) && !trigger.contains(e.target)) {
+                dd.classList.add('hidden');
+            }
+        });
+        document.getElementById('userMenuProfileBtn').onclick = () => {
+            document.getElementById('userMenuDropdown').classList.add('hidden');
+            switchTab('profile');
+        };
+        document.getElementById('userMenuLogoutBtn').onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
         async function afterLogin() {
             const { data: { user } } = await sb.auth.getUser();
@@ -336,6 +370,15 @@
 
             if (isAnyCurator()) document.getElementById('curatorTabBtn').classList.remove('hidden');
 
+            // Новачки бачать лише "Хаб знань" — доки адмін не зніме роль
+            // "Новачок" і не видасть їм робочу роль.
+            if (isNewbie()) {
+                document.getElementById('titlesTabBtn').classList.add('hidden');
+                document.getElementById('curatorTabBtn').classList.add('hidden');
+                document.getElementById('jobsTabBtn').classList.add('hidden');
+                switchTab('hub');
+            }
+
             loadData();
 
             // Періодично перевіряємо, чи не з'явилися нові відгуки на біржі —
@@ -363,14 +406,16 @@
         };
 
         // --- TABS ---
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn, .tab-panel').forEach(e => e.classList.remove('active'));
+            const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+            if (btn) btn.classList.add('active');
+            document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+            if (tabName === 'jobs') loadJobs();
+            if (tabName === 'profile') loadProfile();
+        }
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.onclick = () => {
-                document.querySelectorAll('.tab-btn, .tab-panel').forEach(e => { e.classList.remove('active'); });
-                btn.classList.add('active');
-                document.getElementById('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
-                if (btn.dataset.tab === 'jobs') loadJobs();
-                if (btn.dataset.tab === 'profile') loadProfile();
-            };
+            btn.onclick = () => switchTab(btn.dataset.tab);
         });
 
         // --- DATA LOAD ---
